@@ -18,6 +18,6 @@
 
 # Our DataSource is instantiated through a Factory that R8 can see, but the
 # custom wt:// scheme handling is reached only via Media3's reflection paths.
--keep class com.wateruse.weartube.player.RangedDataSource { *; }
--keep class com.wateruse.weartube.player.RangedDataSource$Factory { *; }
--keep class com.wateruse.weartube.player.PlaybackService { *; }
+-keep class com.hallide.weartubeplus.player.RangedDataSource { *; }
+-keep class com.hallide.weartubeplus.player.RangedDataSource$Factory { *; }
+-keep class com.hallide.weartubeplus.player.PlaybackService { *; }

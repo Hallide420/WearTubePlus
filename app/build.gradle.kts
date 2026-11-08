@@ -6,34 +6,34 @@ plugins {
 // Release signing. The keystore is generated on first release build and is
 // NEVER committed (see .gitignore) — losing it means no future update can be
 // installed over an existing install, so back it up outside the repo.
-val keystoreFile = rootProject.file("weartube.keystore")
+val keystoreFile = rootProject.file(System.getenv("WEARTUBE_KEYSTORE") ?: "weartubeplus.keystore")
 
 android {
-    namespace = "com.wateruse.weartube"
+    namespace = "com.hallide.weartubeplus"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.wateruse.weartube"
+        applicationId = "com.hallide.weartubeplus"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     signingConfigs {
         create("release") {
             if (keystoreFile.exists()) {
                 storeFile = keystoreFile
-                storePassword = "android"
-                keyAlias = "weartube"
-                keyPassword = "android"
+                storePassword = System.getenv("WEARTUBE_STORE_PASSWORD") ?: "android"
+                keyAlias = System.getenv("WEARTUBE_KEY_ALIAS") ?: "weartubeplus"
+                keyPassword = System.getenv("WEARTUBE_KEY_PASSWORD") ?: "android"
             }
         }
     }
 
     buildTypes {
         release {
-            // R8 on: the debug APK is 78MB, mostly unused material-icons-extended.
+            // R8 on: the debug APK is 68MB, mostly unused material-icons-extended.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -67,4 +67,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.wear:wear-input:1.2.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    testImplementation("junit:junit:4.13.2")
 }

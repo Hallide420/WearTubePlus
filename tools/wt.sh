@@ -1,17 +1,18 @@
 #!/bin/bash
-# WearTube on-watch test helper.
+# WearTubePlus on-watch test helper.
 #
-# HARD RULE: only ever talk to the watch. The user's PHONE also advertises adb on
-# this LAN and has been selected by mistake before (a release APK was installed to
-# it). So every candidate is verified by ro.serialno before use — no exceptions,
-# no "first device on the network" shortcuts.
-PKG=com.wateruse.weartube
-WATCH_SERIAL="${WATCH_SERIAL:-RFGL73966FN}"   # Galaxy Watch Ultra 2, SM-L715U
-SCRATCH="${WT_SCRATCH:-$(ls -d /private/tmp/claude-501/-Users-wateruse-CLAUDE/*/scratchpad 2>/dev/null | tail -1)}"
+# HARD RULE: only ever talk to the watch. A phone on the same LAN can also
+# advertise adb, so every candidate is verified by ro.serialno before use.
+# Set WATCH_SERIAL to the value of `adb shell getprop ro.serialno` on the watch.
+PKG=com.hallide.weartubeplus
+WATCH_SERIAL="${WATCH_SERIAL:-}"
+SCRATCH="${WT_SCRATCH:-/tmp/opencode/wtp-shots}"
+mkdir -p "$SCRATCH"
 
 # true only if $1 is genuinely the watch
 wt_is_watch() {
   [ -n "$1" ] || return 1
+  [ -n "$WATCH_SERIAL" ] || return 1
   local s
   s=$(adb -s "$1" shell getprop ro.serialno 2>/dev/null | tr -d '\r\n')
   [ "$s" = "$WATCH_SERIAL" ]
@@ -31,6 +32,11 @@ wt_find() {
   done
   return 1
 }
+
+if [ -z "$WATCH_SERIAL" ]; then
+  echo "Set WATCH_SERIAL to your watch's ro.serialno (adb shell getprop ro.serialno)."
+  exit 2
+fi
 
 W=$(wt_find) || { echo "WATCH UNREACHABLE (serial $WATCH_SERIAL not found)"; exit 3; }
 export W

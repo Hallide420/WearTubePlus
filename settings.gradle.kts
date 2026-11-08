@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "WearTube"
+rootProject.name = "WearTubePlus"
 include(":app")
