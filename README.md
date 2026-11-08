@@ -19,7 +19,7 @@ Wear OS has no sideload UI, so install over adb:
 # Enable Settings → Developer options → Wireless debugging on the watch,
 # then read the IP:port from that screen. The port changes when the watch sleeps.
 adb connect <watch-ip>:<port>
-adb install WearTubePlus-0.2.1.apk
+adb install WearTubePlus-0.2.2.apk
 ```
 
 The app installs as `com.hallide.weartubeplus`, so it can coexist with upstream WearTube.
@@ -33,6 +33,8 @@ The app installs as `com.hallide.weartubeplus`, so it can coexist with upstream 
 - **Offline-first playback** — a completed download plays straight from local storage: no stream
   resolution, no URL rotation, no network at all.
 - **Manage in Library → Downloads** — progress, cancel, retry, delete one or delete all.
+- **Battery-friendly** — optionally pause downloads on mobile data or unless the watch is charging
+  (**Library → Settings**).
 
 Current limits, by design for the first release:
 

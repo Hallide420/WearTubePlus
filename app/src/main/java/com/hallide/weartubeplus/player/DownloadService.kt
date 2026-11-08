@@ -39,6 +39,8 @@ class DownloadService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var nm: NotificationManager
+    private var lastNotifyAt = 0L
+    private var lastNotifyKey = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -56,10 +58,29 @@ class DownloadService : Service() {
                 if (active.isEmpty()) {
                     stopSelf()
                 } else {
-                    nm.notify(NOTIF_ID, notification(active))
+                    // Transfers report progress once a second; throttle the
+                    // notification to match instead of rebuilding it per tick.
+                    val key = active.joinToString("|") {
+                        "${it.videoId}:${it.status}:${(it.fraction * 100).toInt()}"
+                    }
+                    val now = System.currentTimeMillis()
+                    if (key != lastNotifyKey && now - lastNotifyAt >= 1_000) {
+                        lastNotifyKey = key
+                        lastNotifyAt = now
+                        nm.notify(NOTIF_ID, notification(active))
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Android 15+ caps `dataSync` foreground services (6 h per 24 h). Pause the
+     * transfers so their `.part` files stay resumable instead of being killed.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Downloader.pauseAll()
+        stopSelf()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

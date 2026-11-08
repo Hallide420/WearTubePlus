@@ -248,6 +248,38 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            item {
+                var wifiOnly by remember { mutableStateOf(Settings.downloadsWifiOnly) }
+                ToggleChip(
+                    checked = wifiOnly,
+                    onCheckedChange = {
+                        wifiOnly = it
+                        Settings.downloadsWifiOnly = it
+                    },
+                    label = { Text("Wi-Fi downloads") },
+                    secondaryLabel = { Text("Pause on mobile data", maxLines = 1) },
+                    toggleControl = {
+                        Icon(ToggleChipDefaults.switchIcon(wifiOnly), contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item {
+                var chargingOnly by remember { mutableStateOf(Settings.downloadsWhileChargingOnly) }
+                ToggleChip(
+                    checked = chargingOnly,
+                    onCheckedChange = {
+                        chargingOnly = it
+                        Settings.downloadsWhileChargingOnly = it
+                    },
+                    label = { Text("Download on charger") },
+                    secondaryLabel = { Text("Pause when unplugged", maxLines = 1) },
+                    toggleControl = {
+                        Icon(ToggleChipDefaults.switchIcon(chargingOnly), contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
@@ -427,7 +459,7 @@ private fun EmptyNote(text: String) {
 private fun downloadSubtitle(d: Download): String = when (d.status) {
     DownloadStatus.QUEUED -> "Queued"
     DownloadStatus.DOWNLOADING -> "${(d.fraction * 100).toInt()}% of ${formatBytes(d.bytesTotal)}"
-    DownloadStatus.PAUSED -> "Paused · ${(d.fraction * 100).toInt()}%"
+    DownloadStatus.PAUSED -> d.error ?: "Paused · ${(d.fraction * 100).toInt()}%"
     DownloadStatus.FAILED -> d.error ?: "Failed"
     DownloadStatus.DONE -> "${formatBytes(d.bytesDone)} · offline"
 }

@@ -14,6 +14,17 @@ A fork of [`channelramble/WearTube`](https://github.com/channelramble/WearTube) 
 - [ ] **M6** storage cap, eviction, auto-delete
 - [x] **M7** signed release pipeline (signing + GitHub Releases; tag CI still to do)
 
+### 0.2.2 battery pass (2026-11-08)
+
+- Downloads can be limited to unmetered networks (Wi-Fi only) and/or to charging only. Both
+  settings pause the transfer with a reason and keep the `.part` file resumable.
+- Offline playback uses `WAKE_MODE_LOCAL`, so watching a download no longer holds a Wi-Fi wake
+  lock for the whole video.
+- Download progress is reported once a second (was 2.5×/s), and the foreground notification is
+  throttled to the same rate; resume positions save every 10 s (was 5 s).
+- `dataSync` foreground services handle Android 15+'s timeout by pausing (resumable) rather than
+  being killed.
+
 ### 0.2.1 performance pass (2026-11-08)
 
 First pass on the "everything feels heavy" report:
@@ -284,8 +295,8 @@ Order of attack:
    main thread; add a baseline profile.
 6. **UI** — request appropriately sized thumbnails, stable list keys everywhere, avoid
    `material-icons-extended` in debug builds, verify no per-frame allocations in `ScalingLazyColumn`.
-7. **Battery** — Wi-Fi-only and charging-only download guards, prompt FGS shutdown, avoid position
-   writes while backgrounded.
+7. **[done] Battery** — Wi-Fi-only and charging-only download guards, prompt FGS shutdown,
+   progress/notification throttling, and local playback without a Wi-Fi wake lock.
 8. **Release hygiene** — gate debug intent hooks behind `BuildConfig.DEBUG`, strip `WTStream`/
    `WTDownload` verbose logs, versionCode scheme, signed GitHub Actions artifact.
 

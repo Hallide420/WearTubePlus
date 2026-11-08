@@ -168,7 +168,9 @@ fun DetailsScreen(
                         }
                     },
                     label = { Text(label, maxLines = 1) },
-                    secondaryLabel = if (d?.status == DownloadStatus.FAILED && !d.error.isNullOrEmpty()) {
+                    secondaryLabel = if ((d?.status == DownloadStatus.FAILED ||
+                            d?.status == DownloadStatus.PAUSED) && !d?.error.isNullOrEmpty()
+                    ) {
                         { Text(d?.error.orEmpty(), maxLines = 1) }
                     } else null,
                     icon = {

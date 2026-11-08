@@ -8,6 +8,7 @@ import com.hallide.weartubeplus.data.DownloadRange
 import com.hallide.weartubeplus.data.DownloadStatus
 import com.hallide.weartubeplus.data.Downloads
 import com.hallide.weartubeplus.data.Net
+import com.hallide.weartubeplus.data.Settings
 import com.hallide.weartubeplus.data.Video
 import com.hallide.weartubeplus.data.friendlyError
 import kotlinx.coroutines.CancellationException
@@ -46,7 +47,7 @@ object Downloader {
     private const val MAX_URL_ROTATIONS = 12
     private const val MAX_ATTEMPTS = 4
     private const val PERSIST_EVERY = 4L * 1024 * 1024
-    private const val REPORT_EVERY_MS = 400L
+    private const val REPORT_EVERY_MS = 1_000L
     private const val TAG = "WTDownload"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -62,16 +63,29 @@ object Downloader {
     fun enqueue(video: Video, kind: DownloadKind = DownloadKind.VIDEO) {
         val existing = Downloads.get(video.id)
         if (existing?.isActive == true) return
+        // Battery guards: refuse to start a transfer over cellular or off the
+        // charger when the user asked us not to. The row lands as PAUSED with a
+        // reason, so tapping it again once conditions change resumes normally.
+        val blocked = blockReason()
+        val status = if (blocked != null) DownloadStatus.PAUSED else DownloadStatus.QUEUED
         when {
-            existing == null -> Downloads.upsert(Download(video = video, kind = kind))
+            existing == null -> Downloads.upsert(
+                Download(video = video, kind = kind, status = status, error = blocked)
+            )
             existing.kind != kind -> {
                 // Different artifact layout: start clean rather than resume the wrong file.
                 Downloads.remove(video.id)
-                Downloads.upsert(Download(video = video, kind = kind))
+                Downloads.upsert(
+                    Download(video = video, kind = kind, status = status, error = blocked)
+                )
             }
             else -> Downloads.update(video.id) {
-                it.copy(status = DownloadStatus.QUEUED, error = null)
+                it.copy(status = status, error = blocked)
             }
+        }
+        if (blocked != null) {
+            Log.i(TAG, "waiting ${video.id}: $blocked")
+            return
         }
         start(video.id)
         appContext?.let { DownloadService.start(it) }
@@ -91,6 +105,24 @@ object Downloader {
         appContext?.let { DownloadService.start(it) }
     }
 
+    /** Pause every active transfer (keeps the .part files resumable). */
+    fun pauseAll() {
+        jobs.values.toList().forEach { it.cancel() }
+    }
+
+    /**
+     * Why a transfer must not run right now, or null when it may.
+     * Checked at enqueue time and before every ranged request, so switching off
+     * Wi-Fi or unplugging mid-download pauses instead of burning battery/data.
+     */
+    private fun blockReason(): String? = when {
+        Settings.downloadsWifiOnly && !Net.isUnmetered() -> "Waiting for Wi-Fi"
+        Settings.downloadsWhileChargingOnly && !Net.isCharging() -> "Waiting for charger"
+        else -> null
+    }
+
+    private class ConditionsUnmet(message: String) : Exception(message)
+
     private fun start(videoId: String) {
         if (jobs[videoId]?.isActive == true) return
         val job = scope.launch {
@@ -102,6 +134,13 @@ object Downloader {
 
     private suspend fun run(videoId: String) {
         val download = Downloads.get(videoId) ?: return
+        // Re-check at run time: enqueue may have happened seconds before the
+        // semaphore let this job through.
+        blockReason()?.let { reason ->
+            Downloads.update(videoId) { it.copy(status = DownloadStatus.PAUSED, error = reason) }
+            Log.i(TAG, "paused $videoId: $reason")
+            return
+        }
         Downloads.update(videoId) { it.copy(status = DownloadStatus.DOWNLOADING, error = null) }
         try {
             if (download.kind == DownloadKind.AUDIO) {
@@ -121,6 +160,12 @@ object Downloader {
                 )
             }
             Log.i(TAG, "done $videoId (${Downloads.videoFile(videoId).length()} bytes)")
+        } catch (e: ConditionsUnmet) {
+            // Not a failure: conditions changed mid-transfer. Keep the .part.
+            Downloads.update(videoId) {
+                it.copy(status = DownloadStatus.PAUSED, error = e.message)
+            }
+            Log.i(TAG, "paused $videoId: ${e.message}")
         } catch (e: CancellationException) {
             // Pause, don't fail: the .part file is a valid resume point.
             Downloads.update(videoId) {
@@ -153,6 +198,7 @@ object Downloader {
 
         while (true) {
             currentCoroutineContext().ensureActive()
+            blockReason()?.let { throw ConditionsUnmet(it) }
             val end = DownloadRange.end(offset)
             val req = Request.Builder()
                 .url(url)

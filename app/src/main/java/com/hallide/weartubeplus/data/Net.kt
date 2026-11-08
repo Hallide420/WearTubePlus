@@ -24,6 +24,27 @@ object Net {
     }
 
     /**
+     * True when the active network is unmetered (Wi-Fi/ethernet).
+     * Used by the Wi-Fi-only download guard; unknown state returns false so a
+     * metered connection is never assumed safe.
+     */
+    fun isUnmetered(): Boolean {
+        val ctx = appContext ?: return false
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }
+
+    /** True while the battery is charging or full. */
+    fun isCharging(): Boolean {
+        val ctx = appContext ?: return false
+        val bm = ctx.getSystemService(android.os.BatteryManager::class.java) ?: return false
+        return bm.isCharging
+    }
+
+    /**
      * System DNS (IPv4 + IPv6).
      *
      * An IPv4-only Dns was tried 2026-08-18 to dodge googlevideo's `ip=` URL binding

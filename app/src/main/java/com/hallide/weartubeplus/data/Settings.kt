@@ -22,4 +22,14 @@ object Settings {
     var audioOnly: Boolean
         get() = prefs.getBoolean("audioOnly", false)
         set(v) { prefs.edit().putBoolean("audioOnly", v).apply() }
+
+    /** Pause downloads unless the active network is unmetered (Wi-Fi/ethernet). */
+    var downloadsWifiOnly: Boolean
+        get() = prefs.getBoolean("downloadsWifiOnly", false)
+        set(v) { prefs.edit().putBoolean("downloadsWifiOnly", v).apply() }
+
+    /** Pause downloads unless the watch is charging. */
+    var downloadsWhileChargingOnly: Boolean
+        get() = prefs.getBoolean("downloadsWhileChargingOnly", false)
+        set(v) { prefs.edit().putBoolean("downloadsWhileChargingOnly", v).apply() }
 }

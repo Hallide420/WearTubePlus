@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -242,6 +243,10 @@ object PlayerController {
      * expire. Resume positions and history keep working exactly as before.
      */
     private fun playLocal(p: ExoPlayer, video: Video, file: File) {
+        // No network involved: a local playback wake lock is enough. WAKE_MODE_NETWORK
+        // would hold a Wi-Fi lock for the whole video and drain the battery for nothing.
+        p.setWakeMode(C.WAKE_MODE_LOCAL)
+        stallWatchdog?.cancel()
         val d = Downloads.get(video.id)
         val title = d?.video?.title?.takeIf { it.isNotEmpty() } ?: video.title
         val channel = d?.video?.channel?.takeIf { it.isNotEmpty() } ?: video.channel
@@ -297,6 +302,7 @@ object PlayerController {
 
     private fun prepareAndPlay(video: Video, bundle: StreamBundle, sel: StreamChoice, positionMs: Long) {
         val p = player ?: return
+        if (sel.muxedUrl != null || sel.videoUrl != null) p.setWakeMode(C.WAKE_MODE_NETWORK)
         _choice.value = sel
         RangedDataSource.streamUserAgent = bundle.streamUa.ifEmpty { RangedDataSource.streamUserAgent }
         val meta = MediaMetadata.Builder()
@@ -499,7 +505,7 @@ object PlayerController {
         positionJob?.cancel()
         positionJob = scope.launch {
             while (isActive) {
-                delay(5000)
+                delay(10_000)
                 saveCurrentPosition()
             }
         }
