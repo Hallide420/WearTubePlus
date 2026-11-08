@@ -4,6 +4,7 @@ local.properties
 *.apk
 *.aab
 *.idsig
+dist/
 *.keystore
 keystore.properties
 .DS_Store
