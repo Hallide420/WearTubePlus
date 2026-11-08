@@ -1,23 +1,53 @@
 # WearTubePlus
 
-A standalone YouTube client for Wear OS, forked from
-[`channelramble/WearTube`](https://github.com/channelramble/WearTube) (MIT).
-Runs entirely on the watch — no phone app, no companion, no bridge.
+A standalone YouTube client for Wear OS, with **offline downloads**.
 
-**Status: pre-release.** The upstream feature set works; offline downloads are in development.
+Forked from [`channelramble/WearTube`](https://github.com/channelramble/WearTube) (MIT). Runs
+entirely on the watch — no phone app, no companion service, no bridge.
 
-## What this fork changes
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/Hallide420/WearTubePlus?include_prereleases)](https://github.com/Hallide420/WearTubePlus/releases)
 
-- New identity: `com.hallide.weartubeplus`, separate app install alongside upstream
-- Offline downloads (in progress — see [`PLAN.md`](PLAN.md))
-- Portable developer tooling (no hardcoded device serial or machine paths)
-- Signed public APK releases
+## Download
 
-## Features (inherited from WearTube)
+Signed APKs are published on the [Releases page](https://github.com/Hallide420/WearTubePlus/releases).
+Requires **Wear OS 3+** (API 30).
 
-- **Your real feed** — sign in with a TV-style device code (you type a short code on your phone;
-  the watch never sees your password) and Home shows your actual YouTube recommendations and
-  subscriptions. Signed out, it builds a feed from channels you follow locally.
+Wear OS has no sideload UI, so install over adb:
+
+```bash
+# Enable Settings → Developer options → Wireless debugging on the watch,
+# then read the IP:port from that screen. The port changes when the watch sleeps.
+adb connect <watch-ip>:<port>
+adb install WearTubePlus-0.2.0.apk
+```
+
+The app installs as `com.hallide.weartubeplus`, so it can coexist with upstream WearTube.
+
+## Offline downloads
+
+- **Save from the watch** — open a video, tap **Download** on its details page.
+- **Survives your wrist going down** — transfers run in a `dataSync` foreground service and
+  continue while the screen is off.
+- **Resumable** — a partial download picks up where it stopped, including after a reboot.
+- **Offline-first playback** — a completed download plays straight from local storage: no stream
+  resolution, no URL rotation, no network at all.
+- **Manage in Library → Downloads** — progress, cancel, retry, delete one or delete all.
+
+Current limits, by design for the first release:
+
+- Downloads are **360p progressive video only**. That is the one stream YouTube serves without a
+  per-URL byte budget, so it is the only one that can be fetched reliably in one pass.
+- **Audio-only downloads** are not implemented yet; audio-only *streaming* still works.
+- There is no storage cap or automatic eviction yet.
+
+## Features
+
+Inherited from WearTube and kept working:
+
+- **Your real feed** — sign in with a TV-style device code (type a short code on your phone; the
+  watch never sees your password) and Home shows your actual recommendations and subscriptions.
+  Signed out, it builds a feed from channels you follow locally.
 - **Search** with the watch keyboard or voice, plus suggestions
 - **Channels** — browse uploads, subscribe/unsubscribe (syncs to your account)
 - **Playlists** — your account's playlists, plus Play All queueing
@@ -28,36 +58,33 @@ Runs entirely on the watch — no phone app, no companion, no bridge.
 - **Mini player** — persistent play/pause pill on every screen
 - **Comments**, autoplay-next, Watch Later, history and resume positions
 
-## Install
+Added by this fork:
 
-Wear OS doesn't have a sideload UI, so install over adb:
-
-```
-adb connect <watch-ip>:<port>
-adb install WearTubePlus.apk
-```
-
-Or build and install in one step with `tools/install-watch.sh <watch-ip>:<port>`.
-
-For the optimized build, use `tools/install-watch.sh --release [<watch-ip>:<port>]`. It sources the
-signing credentials from `$WTP_SIGNING_ENV` (default `~/.config/wtp/signing.env`). The release APK
-is signed with a different key than the debug one, so the debug install must be uninstalled first
-(`adb uninstall com.hallide.weartubeplus`); that also deletes settings and downloads.
-
-
-Enable **Settings → Developer options → Wireless debugging** on the watch first and read the
-IP/port from that screen. The port changes whenever the watch sleeps.
+- **Offline downloads** and local playback
+- Separate identity and preferences, so it does not collide with upstream
+- Portable developer tooling (no hardcoded device serials or machine paths)
+- Signed R8 release builds
 
 ## Building
 
-```
-./gradlew assembleRelease
+```bash
+export JAVA_HOME=/path/to/jdk17+
+export ANDROID_HOME=$HOME/Android/Sdk
+./gradlew :app:assembleDebug     # debug APK
+./gradlew :app:assembleRelease   # minified, resource-shrunk APK
 ```
 
-Requires a JDK and the Android command-line tools with `platforms;android-37.1`. Release builds are
-signed from `WEARTUBE_KEYSTORE` / `WEARTUBE_STORE_PASSWORD` / `WEARTUBE_KEY_ALIAS` /
-`WEARTUBE_KEY_PASSWORD` (see `~/.config/wtp/signing.env`). Keystores are never committed — back
-yours up if you intend to publish updates.
+Requires a JDK and Android SDK platform 37 / build tools 36. Release builds are signed from
+`WEARTUBE_KEYSTORE`, `WEARTUBE_STORE_PASSWORD`, `WEARTUBE_KEY_ALIAS` and `WEARTUBE_KEY_PASSWORD`.
+Keystores are never committed — back yours up, because losing it means future releases cannot be
+installed as updates.
+
+To build and install on a connected watch in one step:
+
+```bash
+tools/install-watch.sh                # debug
+tools/install-watch.sh --release      # signed release
+```
 
 ## How it works
 
@@ -66,18 +93,29 @@ Media3/ExoPlayer. Two details do most of the heavy lifting:
 
 - **Pinned player client.** Current client versions return SABR responses with no stream URLs at
   all. The app pins known-good versions and falls back across several clients.
-- **Per-URL byte budgets.** A googlevideo URL serves roughly 0.5–2MB in total and then refuses
+- **Per-URL byte budgets.** A `googlevideo` URL serves roughly 0.5–2 MB in total and then refuses
   everything, regardless of how small each range is. The app tracks a budget per URL, prefetches a
   replacement before it runs out, and swaps transparently underneath ExoPlayer, so a refusal never
   reaches the decoder.
 
+Downloads sidestep all of that by using the progressive stream, which has no such budget, and
+writing it to a `.part` file the app owns.
+
+## Roadmap
+
+See [`PLAN.md`](PLAN.md). Next up: audio-only downloads, storage limits and eviction, a release
+workflow on tags, and the performance work in §8.
+
 ## Notes
 
 This is an unofficial client and is not affiliated with, endorsed by, or supported by YouTube or
-Google. It is provided for personal use.
+Google. It is provided for personal use. Signing in uses a public TV OAuth client that ships with
+the source; use of the app is subject to YouTube's terms of service.
 
-## License and attribution
+## License
 
-MIT — see [`LICENSE`](LICENSE). Based on WearTube by
-[channelramble](https://github.com/channelramble/WearTube); the original copyright notice is
+MIT — see [`LICENSE`](LICENSE).
+
+Based on [WearTube](https://github.com/channelramble/WearTube) by
+[channelramble](https://github.com/channelramble/WearTube). The original copyright notice is
 retained.
