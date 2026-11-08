@@ -93,11 +93,14 @@ object Downloads {
         indexFile = File(context.filesDir, "downloads.json")
         // A row left DOWNLOADING means the process died mid-transfer. The .part
         // file is still valid, so downgrade to PAUSED instead of discarding it.
-        val loaded = readIndex().map { d ->
+        val stored = readIndex()
+        val loaded = stored.map { d ->
             if (d.status == DownloadStatus.DOWNLOADING) d.copy(status = DownloadStatus.PAUSED) else d
         }
         _items.value = loaded
-        persist(loaded)
+        // Only rewrite the index when the downgrade actually changed something;
+        // startup should not do a pointless write on the main thread.
+        if (loaded != stored) persist(loaded)
     }
 
     fun get(videoId: String): Download? = _items.value.firstOrNull { it.videoId == videoId }
@@ -170,7 +173,9 @@ object Downloads {
 
 /** Pure range arithmetic, kept separate so it is unit-testable off-device. */
 internal object DownloadRange {
-    const val CHUNK: Long = 512L * 1024
+    // Progressive URLs are not byte-budgeted, so a larger range means fewer
+    // round trips. 1 MB keeps memory use modest while halving request count.
+    const val CHUNK: Long = 1024L * 1024
 
     fun end(offset: Long, chunk: Long = CHUNK): Long = offset + chunk - 1
 

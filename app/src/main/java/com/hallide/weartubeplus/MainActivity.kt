@@ -52,6 +52,12 @@ class MainActivity : ComponentActivity() {
         setIntent(newIntent)
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Persist coalesced resume positions when the watch goes back to the face.
+        Store.flush()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Store.init(applicationContext)

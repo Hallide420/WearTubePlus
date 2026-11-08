@@ -12,7 +12,18 @@ A fork of [`channelramble/WearTube`](https://github.com/channelramble/WearTube) 
 - [x] **M4** local playback (offline-first, no resolver, no related fetch)
 - [ ] **M5** audio-only (download progressive → extract AAC)
 - [ ] **M6** storage cap, eviction, auto-delete
-- [ ] **M7** signed release pipeline (signing done; GitHub Actions pending)
+- [x] **M7** signed release pipeline (signing + GitHub Releases; tag CI still to do)
+
+### 0.2.1 performance pass (2026-11-08)
+
+First pass on the "everything feels heavy" report:
+
+- `Store` now parses each JSON file once and keeps it in memory; resume positions are written at
+  most every 30 s, with explicit flushes on stop / service teardown / `onStop`.
+- `Repo.homeFeed()` caps subscriptions at 12 channels, reads history once, and serves a 5-minute
+  cache per auth state.
+- Downloads use 1 MB ranges instead of 512 KB, and startup no longer rewrites an unchanged index.
+
 
 Verified on emulator: a real video downloaded (629,172 bytes + thumbnail) and played back with
 airplane mode on — first video frame rendered, zero network resolves, no crashes.
@@ -260,15 +271,15 @@ Order of attack:
 
 1. **[done] Ship/test R8 builds** — debug is unminified and logs heavily; not representative of
    watch performance. Signed release (v0.2.0) is verified on the emulator and ready to sideload.
-2. **Storage I/O in `Store`** — every `history()` / `position()` call re-reads and re-parses the
-   whole JSON file, and `savePosition()` rewrites `positions.json` every 5 s during playback.
-   Move to an in-memory cache with periodic/on-stop flush.
-3. **Home feed fan-out** — `Repo.homeFeed()` may fetch 20 channels × 5 videos (4 concurrent) plus
-   related videos for 3 recents. Reduce the fan-out, cache the assembled feed, serve stale-while-
-   revalidate.
-4. **Download throughput** — progressive URLs are unthrottled, so raise `DownloadRange.CHUNK`
-   from 512 KB to 1–2 MB (fewer requests), keep a single open output stream per response, and
-   persist progress less often.
+2. **[done] Storage I/O in `Store`** — every `history()` / `position()` call re-read and re-parsed
+   the whole JSON file, and `savePosition()` rewrote `positions.json` every 5 s during playback.
+   Now parsed once into memory, with coalesced position writes (30 s) plus flushes on stop,
+   service teardown and `onStop`.
+3. **[done] Home feed fan-out** — `Repo.homeFeed()` fetched up to 20 channels × 5 videos plus
+   related videos for 3 recents, on every visit. Now 12 channels, history read once, and the
+   assembled feed is cached for 5 minutes per auth state.
+4. **[done] Download throughput** — `DownloadRange.CHUNK` raised from 512 KB to 1 MB and the
+   startup index rewrite is skipped when nothing changed.
 5. **Startup** — move `Downloads.init` / `Store` index parsing and Coil disk-cache setup off the
    main thread; add a baseline profile.
 6. **UI** — request appropriately sized thumbnails, stable list keys everywhere, avoid

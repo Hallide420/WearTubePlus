@@ -116,6 +116,8 @@ object PlayerController {
     }
 
     internal fun onServiceDestroyed() {
+        // Capture the last position while the player still exists, then persist it.
+        saveCurrentPosition(flushNow = true)
         player?.removeListener(listener)
         player = null
         _playerFlow.value = null
@@ -131,7 +133,7 @@ object PlayerController {
 
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_ENDED) {
-                saveCurrentPosition(ended = true)
+                saveCurrentPosition(ended = true, flushNow = true)
                 if (Settings.autoplayNext) playNext()
             }
         }
@@ -480,7 +482,7 @@ object PlayerController {
     }
 
     fun stop() {
-        saveCurrentPosition()
+        saveCurrentPosition(flushNow = true)
         stallWatchdog?.cancel()
         positionJob?.cancel()
         player?.stop()
@@ -503,10 +505,13 @@ object PlayerController {
         }
     }
 
-    private fun saveCurrentPosition(ended: Boolean = false) {
+    private fun saveCurrentPosition(ended: Boolean = false, flushNow: Boolean = false) {
         val p = player ?: return
         val v = _nowPlaying.value ?: return
         val posSec = if (ended) 0L else p.currentPosition / 1000
-        scope.launch(Dispatchers.IO) { Store.savePosition(v.id, posSec) }
+        scope.launch(Dispatchers.IO) {
+            Store.savePosition(v.id, posSec)
+            if (flushNow) Store.flush()
+        }
     }
 }

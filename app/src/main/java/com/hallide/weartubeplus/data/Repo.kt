@@ -88,13 +88,45 @@ object Repo {
         val forYou: List<Video>,
     )
 
+    // Reopening Home should not refetch 15+ endpoints. The feed is cached per
+    // auth state and served for a few minutes; pull-to-retry still forces a load.
+    private data class FeedKey(val tvSignedIn: Boolean, val googleSignedIn: Boolean)
+
+    private var feedCache: HomeFeed? = null
+    private var feedCacheKey: FeedKey? = null
+    private var feedCacheAt: Long = 0L
+    private const val FEED_TTL_MS = 5 * 60_000L
+
+    /**
+     * Cached [loadHomeFeed]. `force` bypasses the cache when the user asks to
+     * refresh after an error.
+     */
+    suspend fun homeFeed(force: Boolean = false): HomeFeed = withContext(Dispatchers.IO) {
+        val key = FeedKey(TvAuth.isSignedIn, Auth.token != null)
+        val cached = feedCache
+        val fresh = cached != null && key == feedCacheKey &&
+            System.currentTimeMillis() - feedCacheAt < FEED_TTL_MS
+        if (!force && fresh) return@withContext cached!!
+        loadHomeFeed().also {
+            feedCache = it
+            feedCacheKey = key
+            feedCacheAt = System.currentTimeMillis()
+        }
+    }
+
+    /** Called when sign-in state changes so Home does not show the previous account. */
+    fun invalidateFeed() {
+        feedCache = null
+        feedCacheKey = null
+    }
+
     /**
      * Subscriptions: the account's channels (Data API) when signed in, else local ones —
      * uploads fetched per channel via anonymous browse, interleaved round-robin so one
      * prolific channel can't flood the feed.
      * For You: related videos of up to 3 recently watched videos, deduped.
      */
-    suspend fun homeFeed(): HomeFeed = withContext(Dispatchers.IO) {
+    private suspend fun loadHomeFeed(): HomeFeed = withContext(Dispatchers.IO) {
         // Signed in to the TV client: serve the account's REAL feeds.
         if (TvAuth.isSignedIn && TvAuth.refreshIfNeeded() != null) {
             val recs = try { Parsers.videos(InnerTube.tvBrowse("FEwhat_to_watch")) } catch (e: Exception) {
@@ -113,7 +145,9 @@ object Repo {
         }
         coroutineScope {
             val accountChannels = if (Auth.token != null) GoogleApi.mySubscriptions() else emptyList()
-            val subs = accountChannels.ifEmpty { Store.subscriptions() }.take(20)
+            // 12 channels is plenty for a wrist-sized feed and avoids 20 parallel
+            // browse storms on watch Wi-Fi.
+            val subs = accountChannels.ifEmpty { Store.subscriptions() }.take(12)
             val gate = Semaphore(4)
             val perChannel = subs.map { ch ->
                 async {
@@ -127,7 +161,8 @@ object Repo {
 
             val subVideos = interleave(perChannel)
 
-            val recents = Store.history().take(3)
+            val recentHistory = Store.history()
+            val recents = recentHistory.take(3)
             val relatedLists = recents.map { v ->
                 async {
                     gate.withPermit {
@@ -137,7 +172,7 @@ object Repo {
             }.map { it.await() }
             val seen = HashSet<String>()
             subVideos.forEach { seen.add(it.id) }
-            Store.history().take(50).forEach { seen.add(it.id) }
+            recentHistory.take(50).forEach { seen.add(it.id) }
             val forYou = interleave(relatedLists).filter { seen.add(it.id) }
 
             HomeFeed(subVideos, forYou)

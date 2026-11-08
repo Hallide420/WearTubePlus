@@ -19,7 +19,7 @@ Wear OS has no sideload UI, so install over adb:
 # Enable Settings → Developer options → Wireless debugging on the watch,
 # then read the IP:port from that screen. The port changes when the watch sleeps.
 adb connect <watch-ip>:<port>
-adb install WearTubePlus-0.2.0.apk
+adb install WearTubePlus-0.2.1.apk
 ```
 
 The app installs as `com.hallide.weartubeplus`, so it can coexist with upstream WearTube.
